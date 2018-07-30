@@ -33,9 +33,31 @@ struct tcp_h{
   u_char res:4;
   u_char tcp_offset:4;
 };
+
 void usage() {
   printf("syntax: pcap_test <interface>\n");
   printf("sample: pcap_test wlan0\n");
+}
+
+void print_line(){
+  printf("----------------------------------------------\n");
+}
+
+void print_MAC(struct pcap_pkthdr* header, const u_char* packet){
+	const struct ethernet_h* ethernet;
+	ethernet = (struct ethernet_h*)(packet);
+	print_line();
+	printf("dest mac: %02x:%02x:%02x:%02x:%02x:%02x\n",ethernet->ether_dest[0],ethernet->ether_dest[1],ethernet->ether_dest[2],ethernet->ether_dest[3],ethernet->ether_dest[4],ethernet->ether_dest[5]);
+	printf("src mac: %02x:%02x:%02x:%02x:%02x:%02x\n",ethernet->ether_src[0],ethernet->ether_src[1],ethernet->ether_src[2],ethernet->ether_src[3],ethernet->ether_src[4],ethernet->ether_src[5]);
+}
+
+
+void print_IP(struct pcap_pkthdr* header, const u_char* packet){
+	const struct ip_h* ip;
+	ip = (struct ip_h*)(packet + ETHER_SIZE);
+	print_line();
+        printf("src IP:%u.%u.%u.%u\n",ip->ip_src[0],ip->ip_src[1],ip->ip_src[2],ip->ip_src[3]);
+	printf("dest IP:%u.%u.%u.%u\n",ip->ip_dest[0],ip->ip_dest[1],ip->ip_dest[2],ip->ip_dest[3]);
 }
 
 int main(int argc, char* argv[]) {
@@ -69,19 +91,20 @@ int main(int argc, char* argv[]) {
     u_int total_len=0;
     u_char* data_addr=0;
     ethernet = (struct ethernet_h*)(packet);
-    ip = (struct ip_h*)(packet + ETHER_SIZE);
     if (res == 0) continue;
     if (res == -1 || res == -2) break;
     printf("\n%u bytes captured\n", header->caplen);
-    printf("dest mac: %02x:%02x:%02x:%02x:%02x:%02x ",ethernet->ether_dest[0],ethernet->ether_dest[1],ethernet->ether_dest[2],ethernet->ether_dest[3],ethernet->ether_dest[4],ethernet->ether_dest[5]);
-    printf("src mac: %02x:%02x:%02x:%02x:%02x:%02x\n",ethernet->ether_src[0],ethernet->ether_src[1],ethernet->ether_src[2],ethernet->ether_src[3],ethernet->ether_src[4],ethernet->ether_src[5]);
+    print_MAC(header,packet);
     if(ethernet->ether_type != IP_PROTOCOL){
+	    print_line();
 	    printf("is not IP protocol\n");
     }else{
-	    printf("src IP:%u.%u.%u.%u ",ip->ip_src[0],ip->ip_src[1],ip->ip_src[2],ip->ip_src[3]);
-	    printf("dest IP:%u.%u.%u.%u\n",ip->ip_dest[0],ip->ip_dest[1],ip->ip_dest[2],ip->ip_dest[3]);
+	    ip = (struct ip_h*)(packet + ETHER_SIZE);
 	    ip_size = ip->ihl*4;
+	    print_IP(header,packet);
+
 	    if(ip->ip_protocol != TCP_PROTOCOL){
+		    print_line();
 		    printf("is not TCP protocol\n");
 	    }else{
 		    tcp = (struct tcp_h*)(packet + ETHER_SIZE + ip_size);
@@ -89,14 +112,19 @@ int main(int argc, char* argv[]) {
 		    src_port = tcp->src_port[0]*256 + tcp->src_port[1];
 		    dest_port = tcp->dest_port[0]*256 + tcp->dest_port[1];
 		    total_len = ip->total_len[0]*256+ip->total_len[1];
-		    printf("src port:%d  dest port:%d \n",src_port,dest_port);
 		    data_size = total_len - ip_size - tcp_size;
+
+		    print_line();
+		    printf("src port:%d \ndest port:%d \n",src_port,dest_port);
+
 		    if(data_size !=0){
 			    data_addr = (u_char*)(packet+ETHER_SIZE+ip_size+tcp_size);
 			    if(data_size>15){data_size=15;}
+			    print_line();
 			    for(i=0;i<data_size;i++){
 				    printf("%02x ",*(data_addr+i));
 			    }
+			    printf("\n");
 		    }
 	    }
     }
